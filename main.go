@@ -9,7 +9,6 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/iancoleman/strcase"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
 )
@@ -66,7 +65,7 @@ var cmd = &cobra.Command{
 			parts = parts[:len(parts)-1]
 		}
 
-		kinds := map[string]int{}
+		created := map[string]bool{}
 
 		log.Printf("split file into %d chunks", len(parts))
 
@@ -77,23 +76,42 @@ var cmd = &cobra.Command{
 				log.Fatal("error loading yaml: ", err)
 			}
 
+			if len(data) == 0 {
+				continue
+			}
+
 			// deduce the name of the
-			ks, ok := data["kind"].(string)
+			kind, ok := data["kind"].(string)
 			if !ok {
 				log.Fatalf("no `Kind` field specified for the %d'th document in this file.", i)
 			}
 
-			c, ok := kinds[ks]
-			kinds[ks] = c + 1
-
-			fName := fmt.Sprintf("%s_%d.yaml", strcase.ToSnake(ks), c)
-			if c == 0 {
-				fName = fmt.Sprintf("%s.yaml", strcase.ToSnake(ks))
+			name, ok := data["metadata"].(map[interface {}]interface{})["name"].(string)
+			if !ok {
+				log.Fatalf("no `metadata.name` field specified for the %d'th document in this file.", i)
 			}
 
-			log.Println("Writing file:", fName)
+			ns, ok := data["metadata"].(map[interface {}]interface{})["namespace"].(string)
+			if !ok {
+				if kind != "Namespace" {
+					log.Fatalf("no `metadata.name` field specified for the %d'th document in this file.", i)
+				} else {
+					ns = name
+				}
+			}
 
-			err = ioutil.WriteFile(fmt.Sprintf("%s/%s", outDir, fName), append(p, []byte("\n")...), 0644)
+			filename := kind + "__" + name + "__" + ns + ".yaml"
+
+			c, ok := created[filename]
+			if c {
+				log.Printf("skipping duplicate resource: %s (a %s in namespace %s)\n", name, kind, ns)
+				continue
+			}
+			created[filename] = true
+
+			log.Println("Writing file:", filename)
+
+			err = ioutil.WriteFile(fmt.Sprintf("%s/%s", outDir, filename), append(p, []byte("\n")...), 0644)
 			if err != nil {
 				log.Fatal("error writing file: ", err)
 			}

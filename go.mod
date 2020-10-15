@@ -1,4 +1,4 @@
-module github.com/brendanjryan/k8split
+module github.com/darrenclark/k8split
 
 go 1.12
 
